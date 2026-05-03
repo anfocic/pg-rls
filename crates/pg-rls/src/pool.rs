@@ -106,6 +106,7 @@
 
 use crate::config::Tenancy;
 use crate::TenantId;
+#[cfg(feature = "axum")]
 use axum::{body::Body, http::Request, middleware::Next, response::Response};
 use sqlx::postgres::{PgConnection, PgPoolOptions};
 use std::future::Future;
@@ -259,6 +260,7 @@ where
 /// GUC-agnostic: this middleware sets the task-local, the pool hooks
 /// (which know the GUC name) read it. A single `tenant_scope` works for
 /// any [`crate::Tenancy`] configuration.
+#[cfg(feature = "axum")]
 pub async fn tenant_scope(req: Request<Body>, next: Next) -> Response {
     match req.extensions().get::<TenantId>().cloned() {
         Some(tenant) => scope_tenant(tenant, next.run(req)).await,
@@ -269,6 +271,7 @@ pub async fn tenant_scope(req: Request<Body>, next: Next) -> Response {
 async fn apply_tenant_guc(conn: &mut PgConnection, guc: &str) -> sqlx::Result<()> {
     match TENANT_ID.try_with(|t| t.0.clone()) {
         Ok(value) => {
+            tracing::trace!(target: "pg_rls", guc, tenant = %value, "binding tenant GUC on checkout");
             sqlx::query("SELECT set_config($1, $2, false)")
                 .bind(guc)
                 .bind(value)
@@ -276,6 +279,7 @@ async fn apply_tenant_guc(conn: &mut PgConnection, guc: &str) -> sqlx::Result<()
                 .await?;
         }
         Err(_) => {
+            tracing::trace!(target: "pg_rls", guc, "no tenant bound — resetting GUC on checkout");
             let sql = format!("RESET {guc}");
             sqlx::query(&sql).execute(&mut *conn).await?;
         }
@@ -285,6 +289,7 @@ async fn apply_tenant_guc(conn: &mut PgConnection, guc: &str) -> sqlx::Result<()
 
 async fn mirror_guc_if_set(conn: &mut PgConnection, guc: &str) -> sqlx::Result<()> {
     if let Ok(value) = TENANT_ID.try_with(|t| t.0.clone()) {
+        tracing::trace!(target: "pg_rls", guc, tenant = %value, "mirroring tenant GUC into new connection");
         sqlx::query("SELECT set_config($1, $2, false)")
             .bind(guc)
             .bind(value)

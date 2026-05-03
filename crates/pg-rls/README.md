@@ -4,7 +4,7 @@
 [![docs.rs](https://docs.rs/pg-rls/badge.svg)](https://docs.rs/pg-rls)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-Tenant-isolation helpers for Axum + sqlx + Postgres apps that use row-level security for multi-tenancy.
+Postgres RLS for sqlx — with the foot-guns already caught. Tenant-isolation helpers, boot-time audit, canonical policy SQL emitter. Axum middleware is included behind the default `axum` feature; the `pool`, `audit`, `policy`, and `tx` modules work without it.
 
 ## Is this for you?
 
@@ -30,8 +30,8 @@ Tenant-isolation helpers for Axum + sqlx + Postgres apps that use row-level secu
       <td>yes — <code>Tenancy::new().guc("app.org_id").schema("app").tenant_column("org_id")</code></td>
     </tr>
     <tr>
-      <td>Actix / warp / Rocket</td>
-      <td>the <code>pool</code>, <code>audit</code>, and <code>policy</code> modules are framework-agnostic; bring your own ~15 LOC of middleware</td>
+      <td>Actix / warp / Rocket / no framework</td>
+      <td>yes — disable the default <code>axum</code> feature: <code>pg-rls = { version = "0.2", default-features = false }</code>. The <code>pool</code>, <code>audit</code>, <code>policy</code>, and <code>tx</code> modules stay; bring your own ~15 LOC middleware</td>
     </tr>
     <tr>
       <td>Diesel, SeaORM, or any non-sqlx</td>
@@ -159,6 +159,7 @@ tx.commit().await?;
 - **A DB path that bypasses the integration.** Raw pools, missing `tenant_scope`, plain `tokio::spawn`, and unscoped jobs all skip the model. Treat jobs and spawned tasks as first-class integration paths, not exceptions.
 - **Broken RLS policy or deployment config.** Missing `FORCE`, disabled RLS, superuser roles, or semantically wrong predicates are still your bug to catch — `audit::ensure_isolation` flags the common cases.
 - **Side systems ignoring the same contract.** Workers, scripts, and other services touching the same DB need the same role and binding helpers.
+- **Policies that reference the GUC indirectly via a SQL function call** (e.g. `USING (auth.current_tenant() = tenant_id)` where `auth.current_tenant()` reads `current_setting(...)` internally). The `policy_no_guc_reference` finder is a substring match on the policy's USING expression, so it false-positives on indirect reads. Inline the `current_setting` call in the policy or filter the affected rows out of your boot check.
 
 ## What's not in the crate
 
@@ -169,8 +170,18 @@ tx.commit().await?;
 ## Compatibility
 
 - Rust **1.88+** (MSRV).
-- `axum = "0.8"`, `sqlx = "0.8"` (with `runtime-tokio` and the `postgres` feature).
-- Postgres 14+ (any version with RLS — practically every supported release).
+- `axum = "0.8"` (optional; behind the default `axum` feature), `sqlx = "0.8"` (with `runtime-tokio` and the `postgres` feature).
+- Postgres **14, 15, 16, 17** — covered by the CI test matrix.
+
+## Cargo features
+
+| feature | default | what it adds |
+|---|---|---|
+| `axum` | yes | `TenantId: FromRequestParts`, `pool::tenant_scope` middleware. Disable to use `pg-rls` without pulling in axum. |
+
+## Observability
+
+The pool hooks emit `tracing` events on every bind/release at `TRACE` level under the `pg_rls` target. `audit::ensure_isolation` runs inside an `INFO` span and emits a `WARN` event with finding counts when the report is non-empty. Plug into your existing `tracing-subscriber` setup; no extra wiring needed.
 
 ## Security
 

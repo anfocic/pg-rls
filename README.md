@@ -4,7 +4,7 @@
 [![crates.io](https://img.shields.io/crates/v/pg-rls.svg)](https://crates.io/crates/pg-rls)
 [![docs.rs](https://docs.rs/pg-rls/badge.svg)](https://docs.rs/pg-rls)
 
-Tenant-isolation helpers for **Axum + sqlx + Postgres** apps that use **row-level security** for multi-tenancy.
+Postgres RLS for sqlx — with the foot-guns already caught. Tenant-isolation helpers, boot-time audit, canonical policy SQL emitter. Axum middleware is included behind the default `axum` feature.
 
 ## Is this for you?
 

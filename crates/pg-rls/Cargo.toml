@@ -1,7 +1,7 @@
 [package]
 name = "pg-rls"
-version = "0.1.0"
-description = "Tenant-isolation helpers for sqlx + Postgres apps that use row-level security. Axum middleware included."
+version = "0.2.0"
+description = "Postgres RLS for sqlx — with the foot-guns already caught. Tenant-isolation helpers, boot-time audit, canonical policy SQL. Axum middleware behind the default `axum` feature."
 documentation = "https://docs.rs/pg-rls"
 keywords = ["multi-tenant", "sqlx", "postgres", "rls", "axum"]
 categories = ["web-programming", "database", "asynchronous"]
@@ -21,17 +21,27 @@ include = [
     "CHANGELOG.md",
 ]
 
+[features]
+default = ["axum"]
+axum = ["dep:axum"]
+
 [dependencies]
-axum = { workspace = true }
+axum = { workspace = true, optional = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
 tower = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+proptest = "1"
+
+[[test]]
+name = "smoke"
+required-features = ["axum"]
 
 [package.metadata.docs.rs]
 all-features = true

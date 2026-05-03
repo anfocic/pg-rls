@@ -4,6 +4,28 @@ All notable changes to `pg-rls` are documented here. The format is based on [Kee
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-05-03
+
+Hardening release: addresses the credibility gaps a senior reviewer would flag on 0.1.0. **No breaking source-level changes** for the default-feature configuration; bumped to 0.2 because `axum` moved from a hard dep to a default-on Cargo feature, which is technically a breaking change for the `Cargo.toml` of any downstream that disabled default features in some other dep tree.
+
+### Added
+- **`Report::policy_no_guc_reference`** — flags policies whose USING expression doesn't reference `current_setting('<configured guc>'` at all (`USING (TRUE)`, `USING (1=1)`, `USING (visibility = 'public')`). These are tenant leaks the previous audit shape missed. Heuristic substring match; documented false-positive class is policies that read the GUC indirectly via a SQL function call.
+- **`tracing` instrumentation.** Pool hooks emit `TRACE`-level events on every bind/release under the `pg_rls` target. `audit::ensure_isolation` runs inside an `INFO` span and emits a `WARN` event with finding counts when the report is non-empty. Plug into your existing `tracing-subscriber`; no extra wiring.
+- **Property tests for the policy SQL emitter** (`tests/policy_property.rs`) — proptest, 256 cases per property, covering valid + invalid identifier shapes for table, schema, policy name, and cast type. Asserts the validator panics or the resulting SQL has no unbalanced quoting.
+- **CI matrix on Postgres 14, 15, 16, 17.** Live audit and pool-hook tests now run against every supported PG version.
+- **CI step builds and tests with `--no-default-features`** to prove the `axum`-free path keeps working.
+
+### Changed
+- **`axum` is now a default Cargo feature, not a hard dependency.** Disable with `default-features = false` to use `pg-rls` from Actix / warp / Rocket / no-framework code; the `pool` (sans `tenant_scope` middleware), `audit`, `policy`, and `tx` modules all work without axum. The `TenantId` data type stays available either way; only the `FromRequestParts` impl and the `tenant_scope` middleware are gated.
+- **Crate description rewritten** to lead with the differentiator ("with the foot-guns already caught") rather than the generic stack listing.
+
+### Internal
+- Smoke test marked `required-features = ["axum"]` in `Cargo.toml` so it skips cleanly under `--no-default-features`.
+- New `tests/adversarial.rs` integration suite — six probes that try to break the crate's promises (SQL injection via `TenantId` value, empty `TenantId`, plain `tokio::spawn` without `spawn_with_tenant`, concurrent distinct tenants on one pool, stale connection after release, audit's known gap on `USING (TRUE)` policies). All pass; the known-gap test pins current behaviour so a future audit improvement fails it and forces a CHANGELOG note.
+
+### Known limitations
+- `policy_no_guc_reference` is a substring match on the policy's USING expression. A policy that reads the configured GUC indirectly via a SQL function call (the function name appears in the qual, not the GUC name) will be flagged as a false positive. Inline `current_setting(...)` in the policy or filter the affected rows out of your boot check.
+
 ## [0.1.0] — 2026-05-03
 
 Initial release under the `pg-rls` name. Evolved from the `tenaxum` crate (0.1–0.2 on crates.io); renamed to drop the framework-specific suffix in advance of `axum` becoming an optional feature. The 0.1.0 surface is what `tenaxum` 0.2.0 shipped plus the policy SQL helper prepared as `tenaxum` 0.3.
@@ -29,5 +51,6 @@ Initial release under the `pg-rls` name. Evolved from the `tenaxum` crate (0.1�
 
 The `tenaxum` 0.2.0 crate stays published unchanged; no further versions ship under that name.
 
-[Unreleased]: https://github.com/anfocic/pg-rls/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/anfocic/pg-rls/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/anfocic/pg-rls/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/anfocic/pg-rls/releases/tag/v0.1.0
