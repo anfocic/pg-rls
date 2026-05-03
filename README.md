@@ -8,15 +8,45 @@ Tenant-isolation helpers for **Axum + sqlx + Postgres** apps that use **row-leve
 
 ## Is this for you?
 
-| your stack | works? |
-|---|---|
-| Axum 0.8 + sqlx 0.8 + Postgres + RLS | yes — drop-in |
-| same, but tenant ID is `i64` / slug / `String` | yes — `TenantId::from(your_id)` |
-| same, but GUC name is `app.org_id`, schema is `app`, column is `org_id` | yes — `Tenancy::new().guc("app.org_id").schema("app").tenant_column("org_id")` |
-| Actix / warp / Rocket | the `pool` and `audit` modules are framework-agnostic; you'll write your own middleware (≈ 15 LOC) |
-| Diesel, SeaORM, or any non-sqlx | no — sqlx-specific |
-| MySQL, SQLite, anything not Postgres | no — RLS is a Postgres feature |
-| application-level isolation (no RLS) | no — this crate is specifically for RLS |
+<table>
+  <colgroup>
+    <col width="45%">
+    <col width="55%">
+  </colgroup>
+  <thead>
+    <tr><th align="left">your stack</th><th align="left">works?</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Axum 0.8 + sqlx 0.8 + Postgres + RLS</td>
+      <td>yes — drop-in</td>
+    </tr>
+    <tr>
+      <td>same, but tenant ID is <code>i64</code> / slug / <code>String</code></td>
+      <td>yes — <code>TenantId::from(your_id)</code></td>
+    </tr>
+    <tr>
+      <td>same, but GUC name is <code>app.org_id</code>, schema is <code>app</code>, column is <code>org_id</code></td>
+      <td>yes — <code>Tenancy::new().guc("app.org_id").schema("app").tenant_column("org_id")</code></td>
+    </tr>
+    <tr>
+      <td>Actix / warp / Rocket</td>
+      <td>the <code>pool</code> and <code>audit</code> modules are framework-agnostic; you'll write your own middleware (≈ 15 LOC)</td>
+    </tr>
+    <tr>
+      <td>Diesel, SeaORM, or any non-sqlx</td>
+      <td>no — sqlx-specific</td>
+    </tr>
+    <tr>
+      <td>MySQL, SQLite, anything not Postgres</td>
+      <td>no — RLS is a Postgres feature</td>
+    </tr>
+    <tr>
+      <td>application-level isolation (no RLS)</td>
+      <td>no — this crate is specifically for RLS</td>
+    </tr>
+  </tbody>
+</table>
 
 ## What's in it
 
