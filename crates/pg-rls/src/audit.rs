@@ -53,6 +53,19 @@
 //! groups unconditionally. The last group is a policy-style convention:
 //! valuable, but not by itself proof of a leak.
 //!
+//! ## Known gaps
+//!
+//! The audit reads `pg_get_expr(polqual, polrelid)` and pattern-matches
+//! a small set of known-bad shapes. A policy whose USING expression is
+//! valid SQL but doesn't reference `current_setting(...)` at all —
+//! `USING (TRUE)`, `USING (1=1)`, `USING (some_other_column = 'foo')` —
+//! will pass the audit even though it's a tenant leak. Detecting this
+//! requires deeper expression analysis (parse the qual, check that it
+//! references the configured GUC). Tracked for a future release; the
+//! `tests/adversarial.rs::known_gap_audit_misses_policy_without_guc_reference`
+//! test pins the current behaviour so it'll fail-loud the day it's
+//! closed.
+//!
 //! ## Schema and column scope
 //!
 //! By default the audit walks the `public` schema and recognises columns

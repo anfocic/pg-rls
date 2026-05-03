@@ -20,6 +20,10 @@ Hardening release: addresses the credibility gaps a senior reviewer would flag o
 
 ### Internal
 - Smoke test marked `required-features = ["axum"]` in `Cargo.toml` so it skips cleanly under `--no-default-features`.
+- New `tests/adversarial.rs` integration suite — six probes that try to break the crate's promises (SQL injection via `TenantId` value, empty `TenantId`, plain `tokio::spawn` without `spawn_with_tenant`, concurrent distinct tenants on one pool, stale connection after release, audit's known gap on `USING (TRUE)` policies). All pass; the known-gap test pins current behaviour so a future audit improvement fails it and forces a CHANGELOG note.
+
+### Known gaps (documented, not fixed in this release)
+- `audit::ensure_isolation` does not detect policies whose USING expression doesn't reference the configured GUC at all (`USING (TRUE)`, `USING (1=1)`). Closing this requires parsing `pg_get_expr(polqual, polrelid)` and verifying it references `current_setting(<configured guc>, true)`. Tracked.
 
 ## [0.1.0] — 2026-05-03
 
