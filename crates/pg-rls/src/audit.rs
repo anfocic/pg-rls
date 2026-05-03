@@ -244,6 +244,13 @@ impl Tenancy {
     /// configured schemas and tenant column. See [`Report`] for what
     /// each finding means.
     pub async fn ensure_isolation(&self, pool: &PgPool) -> sqlx::Result<Report> {
+        let _span = tracing::info_span!(
+            target: "pg_rls",
+            "pg_rls.audit",
+            schemas = ?self.schemas,
+            tenant_column = self.tenant_column.as_ref(),
+        )
+        .entered();
         let schemas: Vec<String> = self.schemas.iter().map(|s| s.to_string()).collect();
         let tenant_col = self.tenant_column.as_ref();
         let mut report = Report::default();
@@ -400,6 +407,21 @@ impl Tenancy {
             .into_iter()
             .map(|(schema, table)| TableName { schema, table })
             .collect();
+
+        if report.is_clean() {
+            tracing::info!(target: "pg_rls", "audit clean — no RLS misconfiguration findings");
+        } else {
+            tracing::warn!(
+                target: "pg_rls",
+                rls_no_policy = report.rls_no_policy.len(),
+                policy_rls_off = report.policy_rls_off.len(),
+                policy_no_force = report.policy_no_force.len(),
+                policy_no_with_check = report.policy_no_with_check.len(),
+                policy_fail_open = report.policy_fail_open.len(),
+                tenant_col_no_policy = report.tenant_col_no_policy.len(),
+                "audit found RLS misconfigurations — fail closed at boot"
+            );
+        }
 
         Ok(report)
     }

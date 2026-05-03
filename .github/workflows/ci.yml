@@ -10,11 +10,15 @@ env:
 
 jobs:
   test:
-    name: test
+    name: test (PG ${{ matrix.pg }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ["14", "15", "16", "17"]
     services:
       postgres:
-        image: postgres:17
+        image: postgres:${{ matrix.pg }}
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -34,10 +38,12 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h localhost -p 5433 -U postgres -d mtap -f docker/init.sql
-      - name: cargo test
+      - name: cargo test (default features)
         env:
           DATABASE_URL: postgres://mtap_app:mtap_app@localhost:5433/mtap
         run: cargo test --workspace --all-targets
+      - name: cargo test (no default features) - core only
+        run: cargo test -p pg-rls --no-default-features --lib --tests
       - name: smoke test
         env:
           DATABASE_URL: postgres://mtap_app:mtap_app@localhost:5433/mtap
