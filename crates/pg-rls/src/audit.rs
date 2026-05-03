@@ -12,6 +12,9 @@
 //!   (default-deny — every query returns no rows, every write fails)
 //! - **`policy_fail_open`** — `COALESCE(current_setting(...), ...)`
 //!   pattern that degrades to "match every row" when the GUC is unset
+//! - **`policy_no_guc_reference`** — policy USING expression doesn't
+//!   mention `current_setting('<guc>'` at all (`USING (TRUE)`,
+//!   `USING (1=1)`, etc.) — every row visible to every tenant
 //! - **`tenant_col_no_policy`** — table has the configured tenant
 //!   column but no policy at all
 //! - **`policy_no_with_check`** — house-rule recommendation: write
@@ -44,7 +47,7 @@
 //! The audit intentionally mixes findings with different severities:
 //!
 //! - **Likely leak or bypass:** `policy_rls_off`, `policy_no_force`,
-//!   `policy_fail_open`
+//!   `policy_fail_open`, `policy_no_guc_reference`
 //! - **Likely broken configuration / availability issue:** `rls_no_policy`,
 //!   `tenant_col_no_policy`
 //! - **House-rule recommendation:** `policy_no_with_check`
@@ -53,18 +56,16 @@
 //! groups unconditionally. The last group is a policy-style convention:
 //! valuable, but not by itself proof of a leak.
 //!
-//! ## Known gaps
+//! ## Known limitations
 //!
 //! The audit reads `pg_get_expr(polqual, polrelid)` and pattern-matches
-//! a small set of known-bad shapes. A policy whose USING expression is
-//! valid SQL but doesn't reference `current_setting(...)` at all —
-//! `USING (TRUE)`, `USING (1=1)`, `USING (some_other_column = 'foo')` —
-//! will pass the audit even though it's a tenant leak. Detecting this
-//! requires deeper expression analysis (parse the qual, check that it
-//! references the configured GUC). Tracked for a future release; the
-//! `tests/adversarial.rs::known_gap_audit_misses_policy_without_guc_reference`
-//! test pins the current behaviour so it'll fail-loud the day it's
-//! closed.
+//! known-bad shapes. The `policy_no_guc_reference` finder is heuristic:
+//! policies that read the GUC indirectly via a SQL function call (e.g.
+//! `USING (auth.current_tenant() = tenant_id)` where the function
+//! internally calls `current_setting(...)`) won't textually contain the
+//! configured GUC name and will be flagged as false positives. Inline
+//! the `current_setting` call in the policy expression, or filter the
+//! affected rows out of your boot check.
 //!
 //! ## Schema and column scope
 //!
@@ -183,6 +184,20 @@ pub struct Report {
     /// forgot to add the policy, or (b) the table is intentionally
     /// global and the column name is misleading.
     pub tenant_col_no_policy: Vec<TableName>,
+
+    /// Policies whose USING expression doesn't reference
+    /// `current_setting('<configured guc>'` at all — `USING (TRUE)`,
+    /// `USING (1=1)`, `USING (visibility = 'public')`, etc. These pass
+    /// every row to every tenant.
+    ///
+    /// **Heuristic, not parser.** Implemented as a substring check on
+    /// `pg_get_expr(polqual, polrelid)`. False positives are possible
+    /// when a policy reads the GUC via a SQL function call instead of
+    /// inlining `current_setting(...)` — e.g. `USING (auth.current_tenant()
+    /// = tenant_id)`. If you have such a policy and treat this finding
+    /// as a hard fail at boot, either inline the `current_setting` call
+    /// or filter the affected rows out of your boot check.
+    pub policy_no_guc_reference: Vec<PolicyRef>,
 }
 
 impl Report {
@@ -194,6 +209,7 @@ impl Report {
             && self.policy_no_with_check.is_empty()
             && self.policy_fail_open.is_empty()
             && self.tenant_col_no_policy.is_empty()
+            && self.policy_no_guc_reference.is_empty()
     }
 }
 
@@ -246,6 +262,15 @@ impl fmt::Display for Report {
             writeln!(f, "  table has tenant column but no policy attached:")?;
             for t in &self.tenant_col_no_policy {
                 writeln!(f, "    - {t}")?;
+            }
+        }
+        if !self.policy_no_guc_reference.is_empty() {
+            writeln!(
+                f,
+                "  policy USING expression doesn't reference current_setting(<guc>) — every row visible to every tenant:"
+            )?;
+            for p in &self.policy_no_guc_reference {
+                writeln!(f, "    - {p}")?;
             }
         }
         Ok(())
@@ -421,6 +446,38 @@ impl Tenancy {
             .map(|(schema, table)| TableName { schema, table })
             .collect();
 
+        // 7. Policy USING expression doesn't mention current_setting(<guc>)
+        // at all — every row visible to every tenant. Heuristic: substring
+        // match on `current_setting('<guc>'`. False positives are possible
+        // when a policy reads the GUC indirectly via a SQL function call
+        // (the function reference won't textually contain the GUC name).
+        // Documented on the field; users with such policies can filter the
+        // finding out.
+        let needle = format!("current_setting('{}'", self.guc_name.as_ref());
+        let rows: Vec<(String, String, String)> = sqlx::query_as(
+            r#"
+            SELECT n.nspname::text AS schema, c.relname::text AS "table", p.polname::text AS policy
+            FROM pg_policy p
+            JOIN pg_class c ON c.oid = p.polrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = ANY($1)
+              AND COALESCE(pg_get_expr(p.polqual, p.polrelid), '') NOT ILIKE '%' || $2 || '%'
+            ORDER BY n.nspname, c.relname, p.polname
+            "#,
+        )
+        .bind(&schemas)
+        .bind(&needle)
+        .fetch_all(pool)
+        .await?;
+        report.policy_no_guc_reference = rows
+            .into_iter()
+            .map(|(schema, table, policy)| PolicyRef {
+                schema,
+                table,
+                policy,
+            })
+            .collect();
+
         if report.is_clean() {
             tracing::info!(target: "pg_rls", "audit clean — no RLS misconfiguration findings");
         } else {
@@ -432,6 +489,7 @@ impl Tenancy {
                 policy_no_with_check = report.policy_no_with_check.len(),
                 policy_fail_open = report.policy_fail_open.len(),
                 tenant_col_no_policy = report.tenant_col_no_policy.len(),
+                policy_no_guc_reference = report.policy_no_guc_reference.len(),
                 "audit found RLS misconfigurations — fail closed at boot"
             );
         }

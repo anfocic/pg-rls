@@ -9,6 +9,7 @@ All notable changes to `pg-rls` are documented here. The format is based on [Kee
 Hardening release: addresses the credibility gaps a senior reviewer would flag on 0.1.0. **No breaking source-level changes** for the default-feature configuration; bumped to 0.2 because `axum` moved from a hard dep to a default-on Cargo feature, which is technically a breaking change for the `Cargo.toml` of any downstream that disabled default features in some other dep tree.
 
 ### Added
+- **`Report::policy_no_guc_reference`** — flags policies whose USING expression doesn't reference `current_setting('<configured guc>'` at all (`USING (TRUE)`, `USING (1=1)`, `USING (visibility = 'public')`). These are tenant leaks the previous audit shape missed. Heuristic substring match; documented false-positive class is policies that read the GUC indirectly via a SQL function call.
 - **`tracing` instrumentation.** Pool hooks emit `TRACE`-level events on every bind/release under the `pg_rls` target. `audit::ensure_isolation` runs inside an `INFO` span and emits a `WARN` event with finding counts when the report is non-empty. Plug into your existing `tracing-subscriber`; no extra wiring.
 - **Property tests for the policy SQL emitter** (`tests/policy_property.rs`) — proptest, 256 cases per property, covering valid + invalid identifier shapes for table, schema, policy name, and cast type. Asserts the validator panics or the resulting SQL has no unbalanced quoting.
 - **CI matrix on Postgres 14, 15, 16, 17.** Live audit and pool-hook tests now run against every supported PG version.
@@ -22,8 +23,8 @@ Hardening release: addresses the credibility gaps a senior reviewer would flag o
 - Smoke test marked `required-features = ["axum"]` in `Cargo.toml` so it skips cleanly under `--no-default-features`.
 - New `tests/adversarial.rs` integration suite — six probes that try to break the crate's promises (SQL injection via `TenantId` value, empty `TenantId`, plain `tokio::spawn` without `spawn_with_tenant`, concurrent distinct tenants on one pool, stale connection after release, audit's known gap on `USING (TRUE)` policies). All pass; the known-gap test pins current behaviour so a future audit improvement fails it and forces a CHANGELOG note.
 
-### Known gaps (documented, not fixed in this release)
-- `audit::ensure_isolation` does not detect policies whose USING expression doesn't reference the configured GUC at all (`USING (TRUE)`, `USING (1=1)`). Closing this requires parsing `pg_get_expr(polqual, polrelid)` and verifying it references `current_setting(<configured guc>, true)`. Tracked.
+### Known limitations
+- `policy_no_guc_reference` is a substring match on the policy's USING expression. A policy that reads the configured GUC indirectly via a SQL function call (the function name appears in the qual, not the GUC name) will be flagged as a false positive. Inline `current_setting(...)` in the policy or filter the affected rows out of your boot check.
 
 ## [0.1.0] — 2026-05-03
 

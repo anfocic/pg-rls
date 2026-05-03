@@ -277,20 +277,15 @@ async fn concurrent_distinct_tenants_do_not_cross_contaminate() {
 }
 
 /// Attack 5b: A policy that does not reference `current_setting(...)`
-/// at all — e.g. `USING (TRUE)`. This is a real leak (every tenant sees
-/// every row) but the audit's `policy_fail_open` finder only matches
-/// `COALESCE(current_setting(...), ...)`, so this misconfiguration
-/// slips through the audit.
-///
-/// **This test documents a KNOWN GAP**: it asserts the audit DOES NOT
-/// flag `USING (TRUE)`, so any future change that closes the gap will
-/// fail this test and force us to remove it. Tracked for v0.3+.
+/// at all — `USING (TRUE)`. This IS a real leak (every tenant sees
+/// every row). As of 0.2 the audit catches it via the
+/// `policy_no_guc_reference` finder.
 #[tokio::test]
-async fn known_gap_audit_misses_policy_without_guc_reference() {
+async fn audit_catches_policy_without_guc_reference() {
     use pg_rls::audit;
 
     let pool = fresh_pool().await;
-    let table = unique("adv_known_gap");
+    let table = unique("adv_no_guc_ref");
 
     sqlx::query(&format!(
         "CREATE TABLE {table} (id UUID PRIMARY KEY, tenant_id UUID NOT NULL)"
@@ -318,18 +313,13 @@ async fn known_gap_audit_misses_policy_without_guc_reference() {
     let report = audit::ensure_isolation(&pool).await.expect("audit");
     drop_table(&pool, &table).await;
 
-    // The honest assertion: the audit doesn't catch this today. If a
-    // future version of `audit` learns to flag policies whose USING
-    // expression doesn't reference the configured GUC, this assertion
-    // flips. Document by making the test fail when that happens.
-    let flagged_in_fail_open = report
-        .policy_fail_open
+    let flagged = report
+        .policy_no_guc_reference
         .iter()
-        .any(|p| p.table == table);
+        .any(|p| p.table == table && p.policy == "tenant_iso");
     assert!(
-        !flagged_in_fail_open,
-        "BREAKING — audit now catches `USING (TRUE)` policies. \
-         Update CHANGELOG and remove this known-gap test."
+        flagged,
+        "audit failed to flag USING (TRUE) policy in policy_no_guc_reference:\n{report}"
     );
 }
 

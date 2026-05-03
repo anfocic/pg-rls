@@ -159,7 +159,7 @@ tx.commit().await?;
 - **A DB path that bypasses the integration.** Raw pools, missing `tenant_scope`, plain `tokio::spawn`, and unscoped jobs all skip the model. Treat jobs and spawned tasks as first-class integration paths, not exceptions.
 - **Broken RLS policy or deployment config.** Missing `FORCE`, disabled RLS, superuser roles, or semantically wrong predicates are still your bug to catch — `audit::ensure_isolation` flags the common cases.
 - **Side systems ignoring the same contract.** Workers, scripts, and other services touching the same DB need the same role and binding helpers.
-- **Policies whose USING expression doesn't reference the GUC at all.** `audit::ensure_isolation` matches a small set of known-bad shapes (`COALESCE(current_setting...)`, missing FORCE, etc.). A `USING (TRUE)` or `USING (1=1)` policy is a tenant leak that the audit currently does not catch. Tracked as a known gap; pin in `tests/adversarial.rs`.
+- **Policies that reference the GUC indirectly via a SQL function call** (e.g. `USING (auth.current_tenant() = tenant_id)` where `auth.current_tenant()` reads `current_setting(...)` internally). The `policy_no_guc_reference` finder is a substring match on the policy's USING expression, so it false-positives on indirect reads. Inline the `current_setting` call in the policy or filter the affected rows out of your boot check.
 
 ## What's not in the crate
 

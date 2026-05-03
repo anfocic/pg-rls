@@ -66,6 +66,93 @@ fn policy_no_force_for(report: &Report, table: &str) -> bool {
     report.policy_no_force.iter().any(|t| t.table == table)
 }
 
+fn policy_no_guc_reference_for(report: &Report, table: &str, policy: &str) -> bool {
+    report
+        .policy_no_guc_reference
+        .iter()
+        .any(|p| p.table == table && p.policy == policy)
+}
+
+/// A policy whose USING expression doesn't reference
+/// `current_setting('<guc>'` at all is flagged. `USING (TRUE)` is the
+/// most permissive possible policy — every tenant sees every row.
+#[tokio::test]
+async fn flags_policy_without_guc_reference() {
+    let pool = pool().await;
+    let table = format!("audit_no_guc_ref_{}", unique_suffix());
+    let policy = "permissive";
+
+    sqlx::query(&format!(
+        "CREATE TABLE {table} (id UUID PRIMARY KEY, tenant_id UUID NOT NULL)"
+    ))
+    .execute(&pool)
+    .await
+    .expect("create table");
+    sqlx::query(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
+        .execute(&pool)
+        .await
+        .expect("enable rls");
+    sqlx::query(&format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
+        .execute(&pool)
+        .await
+        .expect("force rls");
+    sqlx::query(&format!(
+        "CREATE POLICY {policy} ON {table} USING (TRUE) WITH CHECK (TRUE)"
+    ))
+    .execute(&pool)
+    .await
+    .expect("create policy");
+
+    let report = audit::ensure_isolation(&pool).await.expect("audit");
+    drop_table(&pool, &table).await;
+
+    assert!(
+        policy_no_guc_reference_for(&report, &table, policy),
+        "expected `{table}::{policy}` in policy_no_guc_reference:\n{report}"
+    );
+}
+
+/// A policy that references the configured GUC (even via a mismatched
+/// column type) is NOT flagged in `policy_no_guc_reference`. Negative
+/// case for the heuristic.
+#[tokio::test]
+async fn does_not_flag_policy_referencing_guc() {
+    let pool = pool().await;
+    let table = format!("audit_with_guc_ref_{}", unique_suffix());
+    let policy = "tenant_iso";
+
+    sqlx::query(&format!(
+        "CREATE TABLE {table} (id UUID PRIMARY KEY, tenant_id UUID NOT NULL)"
+    ))
+    .execute(&pool)
+    .await
+    .expect("create table");
+    sqlx::query(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
+        .execute(&pool)
+        .await
+        .expect("enable rls");
+    sqlx::query(&format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
+        .execute(&pool)
+        .await
+        .expect("force rls");
+    sqlx::query(&format!(
+        "CREATE POLICY {policy} ON {table} \
+         USING (tenant_id = current_setting('app.tenant_id', true)::uuid) \
+         WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid)"
+    ))
+    .execute(&pool)
+    .await
+    .expect("create policy");
+
+    let report = audit::ensure_isolation(&pool).await.expect("audit");
+    drop_table(&pool, &table).await;
+
+    assert!(
+        !policy_no_guc_reference_for(&report, &table, policy),
+        "policy that references current_setting should not be flagged:\n{report}"
+    );
+}
+
 #[tokio::test]
 async fn flags_table_with_rls_enabled_but_no_policy() {
     let pool = pool().await;
@@ -441,5 +528,9 @@ async fn passes_clean_tenant_table() {
     assert!(
         !tenant_col_no_policy_for(&report, &table),
         "tenant table with policy should not appear in tenant_col_no_policy:\n{report}"
+    );
+    assert!(
+        !policy_no_guc_reference_for(&report, &table, policy),
+        "clean policy referencing current_setting should not appear in policy_no_guc_reference:\n{report}"
     );
 }
