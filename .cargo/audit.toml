@@ -1,0 +1,24 @@
+# cargo-audit configuration.
+#
+# Ignored advisories must be revisited on every CHANGELOG entry.
+
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071 — rsa Marvin Attack timing sidechannel.
+    #
+    # rsa is a transitive dep of sqlx-mysql. We do not enable sqlx-mysql
+    # (workspace sqlx config is `default-features = false, features =
+    # ["runtime-tokio", "postgres", "uuid", "migrate"]`). The publishable
+    # crate also disables the `macros` feature, so neither the runtime
+    # nor the macros pull rsa into the build graph.
+    #
+    # Verified with `cargo tree -i rsa --workspace --target all` →
+    # "nothing to print" (no compiled path reaches rsa). cargo-audit
+    # surfaces it anyway because it walks Cargo.lock, which records
+    # optional-deps even when their feature gate is off.
+    #
+    # Revisit if (a) rsa releases a fix, (b) sqlx splits its macro
+    # crate so postgres-only users stop having mysql in their lockfile,
+    # or (c) we ever enable sqlx-mysql.
+    "RUSTSEC-2023-0071",
+]
