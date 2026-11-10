@@ -7,13 +7,13 @@
 //! show the fix — same setup, but on the table that has `FORCE ROW LEVEL SECURITY`
 //! and `WITH CHECK`, the cross-tenant read is empty and the cross-tenant write is rejected.
 
+use pg_rls::{set_tenant, TenantId};
+use pg_rls_example::{insert_fixed, insert_naive, list_fixed, list_naive};
 use sqlx::migrate::Migrator;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::path::Path;
 use std::time::Duration;
-use pg_rls::{set_tenant, TenantId};
-use pg_rls_example::{insert_fixed, insert_naive, list_fixed, list_naive};
 use uuid::Uuid;
 
 async fn pool() -> PgPool {

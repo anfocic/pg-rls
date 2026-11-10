@@ -48,6 +48,12 @@ impl Tenancy {
         tx: &mut Transaction<'c, Postgres>,
         tenant: &TenantId,
     ) -> sqlx::Result<()> {
+        tracing::trace!(
+            target: "pg_rls",
+            guc = self.guc_name.as_ref(),
+            tenant = %tenant,
+            "binding tenant GUC on open transaction (SET LOCAL)"
+        );
         sqlx::query("SELECT set_config($1, $2, true)")
             .bind(self.guc_name.as_ref())
             .bind(tenant.as_str())

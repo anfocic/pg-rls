@@ -5,13 +5,13 @@ use axum::middleware;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
+use pg_rls::audit;
+use pg_rls::pool;
+use pg_rls::{PgPoolExt, TenantId};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::time::Duration;
-use pg_rls::audit;
-use pg_rls::pool;
-use pg_rls::{PgPoolExt, TenantId};
 use tower::ServiceExt;
 use uuid::Uuid;
 

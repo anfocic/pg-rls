@@ -1,5 +1,8 @@
+#[cfg(feature = "axum")]
 use axum::extract::FromRequestParts;
+#[cfg(feature = "axum")]
 use axum::http::request::Parts;
+#[cfg(feature = "axum")]
 use axum::http::StatusCode;
 use std::fmt;
 
@@ -117,6 +120,7 @@ macro_rules! tenant_id_from_int {
 
 tenant_id_from_int!(i32, i64, u32, u64, i128, u128);
 
+#[cfg(feature = "axum")]
 impl<S> FromRequestParts<S> for TenantId
 where
     S: Send + Sync,
@@ -131,7 +135,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "axum"))]
 mod tests {
     use super::*;
     use axum::http::Request;

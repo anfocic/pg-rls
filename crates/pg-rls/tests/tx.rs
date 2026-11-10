@@ -1,7 +1,7 @@
+use pg_rls::{set_tenant, PgPoolExt, Tenancy, TenantId};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::Row;
 use std::time::Duration;
-use pg_rls::{set_tenant, PgPoolExt, Tenancy, TenantId};
 use uuid::Uuid;
 
 fn db_url() -> String {

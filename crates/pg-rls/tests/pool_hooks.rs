@@ -8,11 +8,11 @@
 //! under fail-closed RLS. `pg-rls` mirrors the SET into `after_connect`
 //! to cover this; this test asserts the mirror is in place.
 
+use pg_rls::pool::{self, TENANT_ID};
+use pg_rls::{Tenancy, TenantId};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::Row;
 use std::time::Duration;
-use pg_rls::pool::{self, TENANT_ID};
-use pg_rls::{Tenancy, TenantId};
 use uuid::Uuid;
 
 fn db_url() -> String {
