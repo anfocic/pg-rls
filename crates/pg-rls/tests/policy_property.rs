@@ -28,10 +28,10 @@ fn valid_identifier() -> impl Strategy<Value = String> {
 fn invalid_identifier() -> impl Strategy<Value = String> {
     prop_oneof![
         Just(String::new()),
-        "[a-zA-Z]{64,80}",                           // too long
-        "[0-9][a-zA-Z0-9_]*",                        // leading digit
+        "[a-zA-Z]{64,80}",                                  // too long
+        "[0-9][a-zA-Z0-9_]*",                               // leading digit
         "[a-zA-Z_][a-zA-Z0-9_]*[^a-zA-Z0-9_][a-zA-Z0-9_]*", // disallowed char somewhere
-        "[a-zA-Z_]*[';\"\\\\][a-zA-Z_]*",            // injection-flavoured chars
+        "[a-zA-Z_]*[';\"\\\\][a-zA-Z_]*",                   // injection-flavoured chars
     ]
 }
 

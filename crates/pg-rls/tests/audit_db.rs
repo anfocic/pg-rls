@@ -6,11 +6,11 @@
 //! flagged by future runs of the audit; tests therefore filter the report
 //! down to their own table names before asserting.
 
+use pg_rls::audit::{self, Report};
+use pg_rls::Tenancy;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::time::Duration;
-use pg_rls::audit::{self, Report};
-use pg_rls::Tenancy;
 use uuid::Uuid;
 
 fn db_url() -> String {

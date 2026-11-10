@@ -24,9 +24,9 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
+use pg_rls::{PgPoolExt, TenantId};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use pg_rls::{PgPoolExt, TenantId};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]

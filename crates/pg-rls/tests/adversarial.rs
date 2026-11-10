@@ -106,13 +106,17 @@ async fn tenant_id_with_injection_payload_is_inert() {
     }
 
     // Table must still exist.
-    let still_there: (bool,) =
-        sqlx::query_as("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)")
-            .bind(&table)
-            .fetch_one(&pool)
-            .await
-            .expect("query");
-    assert!(still_there.0, "evil TenantId dropped the table — injection leak");
+    let still_there: (bool,) = sqlx::query_as(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)",
+    )
+    .bind(&table)
+    .fetch_one(&pool)
+    .await
+    .expect("query");
+    assert!(
+        still_there.0,
+        "evil TenantId dropped the table — injection leak"
+    );
 
     drop_table(&pool, &table).await;
 }
@@ -249,11 +253,10 @@ async fn concurrent_distinct_tenants_do_not_cross_contaminate() {
                         .await
                         .unwrap();
                     }
-                    let rows: Vec<(String,)> =
-                        sqlx::query_as(&format!("SELECT body FROM {table}"))
-                            .fetch_all(&mut *tx)
-                            .await
-                            .unwrap();
+                    let rows: Vec<(String,)> = sqlx::query_as(&format!("SELECT body FROM {table}"))
+                        .fetch_all(&mut *tx)
+                        .await
+                        .unwrap();
                     tx.commit().await.unwrap();
                     rows
                 })
@@ -264,8 +267,7 @@ async fn concurrent_distinct_tenants_do_not_cross_contaminate() {
 
     for h in handles {
         let rows = h.await.unwrap();
-        let labels: std::collections::BTreeSet<&str> =
-            rows.iter().map(|r| r.0.as_str()).collect();
+        let labels: std::collections::BTreeSet<&str> = rows.iter().map(|r| r.0.as_str()).collect();
         assert_eq!(
             labels.len(),
             1,

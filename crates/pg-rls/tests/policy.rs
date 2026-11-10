@@ -101,5 +101,7 @@ fn rejects_bad_cast_type() {
 #[test]
 #[should_panic(expected = "invalid char")]
 fn rejects_bad_schema() {
-    let _ = Tenancy::default().policy_template("orders").schema("bad-schema");
+    let _ = Tenancy::default()
+        .policy_template("orders")
+        .schema("bad-schema");
 }

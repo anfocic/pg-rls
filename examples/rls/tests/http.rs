@@ -1,12 +1,12 @@
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
+use pg_rls::TenantId;
+use pg_rls_example::{insert_fixed, Note};
 use sqlx::migrate::Migrator;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::path::Path;
 use std::time::Duration;
-use pg_rls::TenantId;
-use pg_rls_example::{insert_fixed, Note};
 use tower::ServiceExt;
 use uuid::Uuid;
 
