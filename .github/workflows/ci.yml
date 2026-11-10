@@ -78,9 +78,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Compares the PR's public API with main. The action's default baseline is
+      # the latest crates.io release, which fails while nothing is published.
       - uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
           package: pg-rls
+          baseline-rev: main
 
   msrv:
     name: msrv (1.88)
@@ -100,6 +103,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # RUSTSEC-2026-0459: libsqlite3-sys bundles a vulnerable SQLite. It is in
+      # Cargo.lock only as sqlx 0.8's optional sqlite driver, which we never
+      # enable: `cargo tree --workspace --target all -e all -i libsqlite3-sys`
+      # finds it in no build. The fixed 0.39 line needs sqlx 0.9 (PR #4).
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          ignore: RUSTSEC-2026-0459
