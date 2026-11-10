@@ -31,7 +31,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Provision non-superuser app role
@@ -53,7 +53,7 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -65,7 +65,7 @@ jobs:
     name: docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: cargo doc
@@ -78,7 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Full history, so the baseline revision below exists in the checkout.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # Compares the PR's public API with main. The action's default baseline is
@@ -97,7 +97,7 @@ jobs:
     # if our direct deps drop their MSRV.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
       # Cargo.lock is not committed, so resolve the way a 1.88 user's Cargo
@@ -110,7 +110,7 @@ jobs:
     name: audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # A library does not commit Cargo.lock; the audit reads one.
       - run: cargo generate-lockfile
       # RUSTSEC-2026-0459: libsqlite3-sys bundles a vulnerable SQLite. It is in
